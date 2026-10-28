@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 
 pub fn gather_hashes(path: PathBuf) -> HashMap<PathBuf, String> {
     let mut result = HashMap::new();
+    let root_path = path.clone();
     path.read_dir().unwrap().for_each(|element| {
         if let Ok(subpath) = element {
             if subpath.path().is_dir() {
@@ -14,7 +15,14 @@ pub fn gather_hashes(path: PathBuf) -> HashMap<PathBuf, String> {
                 hasher.update(read(subpath.path()).unwrap());
                 let hash_result = hasher.finalize();
                 let encoded = hex::encode(hash_result);
-                result.insert(subpath.path(), encoded);
+                result.insert(
+                    subpath
+                        .path()
+                        .strip_prefix(&root_path)
+                        .unwrap_or(&subpath.path())
+                        .to_path_buf(),
+                    encoded,
+                );
             }
         }
     });
