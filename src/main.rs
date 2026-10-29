@@ -1,9 +1,8 @@
 #![allow(clippy::all)]
-use ns::diffengine::{calculate_changes, gather_hashes};
-use std::{collections::HashMap, env::args, io::stdin, net::IpAddr, path::PathBuf, thread::sleep};
+use std::{collections::HashMap, env::args, io::stdin, net::IpAddr};
 use tokio::{
     net::UdpSocket,
-    time::{Duration, Instant, Interval, timeout_at},
+    time::{Duration, Instant, timeout_at},
 };
 use uuid::Uuid;
 
@@ -48,7 +47,7 @@ async fn main() {
         }
     } else {
         let socket = UdpSocket::bind("0.0.0.0:8080").await.unwrap();
-        let mut buf = [0u8; 4096];
+        let _buf = [0u8; 4096];
         let mut known_hosts = HashMap::new();
         let uuid = Uuid::new_v4();
 
