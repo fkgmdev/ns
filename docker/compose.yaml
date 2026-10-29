@@ -15,6 +15,22 @@ services:
       testnet:
         ipv4_address: 10.0.0.11
 
+  server2:
+    image: debian:stable-slim
+    container_name: server2
+    command: /app/ns serve
+    environment:
+      ROLE: server
+      BIND: 0.0.0.0:8080
+      BROADCAST: 255.255.255.255:8080
+      RUST_LOG: debug
+    volumes:
+      - ../target/debug:/app:ro
+    networks:
+      testnet:
+        ipv4_address: 10.0.0.13
+
+
   client:
     image: debian:stable-slim
     container_name: client
