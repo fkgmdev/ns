@@ -4,6 +4,8 @@ services:
     image: debian:stable-slim
     container_name: server
     command: /app/ns serve
+    init: true
+    stop_grace_period: 1s
     environment:
       ROLE: server
       BIND: 0.0.0.0:8080
@@ -35,6 +37,8 @@ services:
     image: debian:stable-slim
     container_name: client
     command: /app/ns get
+    stdin_open: true
+    tty: true
     environment:
       ROLE: client
       BIND: 0.0.0.0:8080
