@@ -81,11 +81,14 @@ async fn client() {
         } else {
             let number: usize = read_buffer.trim().parse().unwrap();
             let (ip, _) = known_hosts.iter().nth(number).unwrap();
-            if connect(&socket, uuid, ip).await {
-                println!("Connected");
-                break;
-            } else {
-                println!("Failed connect");
+            match connect(&socket, uuid, ip).await {
+                Ok(_) => {
+                    println!("Connected");
+                    break;
+                }
+                Err(e) => {
+                    println!("Failed connect: {e}");
+                }
             }
         }
     }
@@ -125,20 +128,21 @@ async fn check_connect(
     result
 }
 
-async fn connect(socket: &UdpSocket, uuid: Uuid, ip: &IpAddr) -> bool {
+async fn connect(socket: &UdpSocket, uuid: Uuid, ip: &IpAddr) -> Result<(), String> {
     let msg = format!("{uuid} connect");
-    if socket.send_to(msg.as_bytes(), (*ip, 8080)).await.is_err() {
-        return false;
-    }
+    socket
+        .send_to(msg.as_bytes(), (*ip, 8080))
+        .await
+        .map_err(|e| e.to_string())?;
     let mut buf = [0u8; 4096];
     let deadline = Instant::now() + Duration::from_secs(2);
 
     while let Ok(Ok((len, addr))) = timeout_at(deadline, socket.recv_from(&mut buf)).await {
         if addr.ip() == *ip && &buf[..len] == b"ok" {
-            return true;
+            return Ok(());
         }
     }
-    false
+    Err("Unspecified".to_string())
 }
 
 async fn scan_for_servers(socket: &UdpSocket) -> HashMap<IpAddr, String> {
