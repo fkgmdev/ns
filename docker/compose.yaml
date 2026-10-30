@@ -48,6 +48,23 @@ services:
     networks:
       testnet:
         ipv4_address: 10.0.0.12
+  
+  client2:
+    image: debian:stable-slim
+    container_name: client2
+    command: /app/ns get
+    stdin_open: true
+    tty: true
+    environment:
+      ROLE: client
+      BIND: 0.0.0.0:8080
+      RUST_LOG: debug
+    volumes:
+      - ../target/debug:/app:ro
+    networks:
+      testnet:
+        ipv4_address: 10.0.0.14
+
 
 networks:
   testnet:
