@@ -29,12 +29,12 @@ async fn server() {
     socket.set_broadcast(true).unwrap();
     let uuid = Uuid::new_v4();
     let mut buf = [0u8; 4096];
-    let mut x = tokio::time::interval(Duration::from_secs(1));
+    let mut broadcast = tokio::time::interval(Duration::from_secs(1));
     let mut connect_checker = tokio::time::interval(Duration::from_secs(5));
     let mut connected = HashMap::new();
     loop {
         tokio::select! {
-            _ = x.tick() => { handle_tick(&socket, uuid).await },
+            _ = broadcast.tick() => { broadcast_msg(&socket, uuid).await },
             result = socket.recv_from(&mut buf) => {
                 match result {
                     Ok((len, peer_addr)) => {
@@ -44,8 +44,12 @@ async fn server() {
                             let reply = "ok";
                             if let Ok(_) = socket.send_to(&reply.as_bytes(), peer_addr).await {
                                 let peer_uuid = msg.split(" ").nth(0).unwrap().to_string();
-                                connected.insert(peer_addr, peer_uuid.clone());
+                                connected.insert(peer_addr, (peer_uuid.clone(), Instant::now()));
                                 println!("{} @ {} connected", peer_uuid, peer_addr);
+                            }
+                        } else if msg.trim().ends_with("check") {
+                            if let Some((_, last_seen)) = connected.get_mut(&peer_addr) {
+                                *last_seen = Instant::now();
                             }
                         }
                     },
@@ -53,9 +57,14 @@ async fn server() {
                 }
             },
             _ = connect_checker.tick() => {
-                connected = check_connect(&connected, &socket).await;
-                for (ip, id) in &connected {
-                    println!("Connected device: {} @ {}", id, ip);
+                // connected = check_connect(&connected, &socket).await;
+                send_check(&connected, &socket).await;
+                let now = Instant::now();
+                connected.retain(|_, (_, last_seen)| {
+                    now.duration_since(*last_seen) < Duration::from_secs(12)
+                });
+                for (ip, (id, last_seen)) in &connected {
+                    println!("Connected device: {} @ {} last seen {}s ago", id, ip, last_seen.elapsed().as_secs());
                 }
             },
         }
@@ -95,14 +104,31 @@ async fn client() {
     let mut buf = [0u8; 4096];
     loop {
         tokio::select! {
-           Ok((len, addr)) = socket.recv_from(&mut buf) => {
-               let msg = String::from_utf8_lossy(&buf[..len]);
-               if msg.trim() == "check" {
-                   let reply = "ok";
-                   let _ = socket.send_to(&reply.as_bytes(), addr).await;
-               }
+           result = socket.recv_from(&mut buf) => {
+                match result {
+                    Ok((len, addr)) => {
+                        let msg = String::from_utf8_lossy(&buf[..len]);
+                        if msg.trim() == "check" {
+                            let reply = "check";
+                            let _ = socket.send_to(&reply.as_bytes(), addr).await;
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        continue;
+                    },
+                }
            }
         }
+    }
+}
+
+async fn send_check(connected: &HashMap<SocketAddr, (String, Instant)>, socket: &UdpSocket) {
+    if connected.is_empty() {
+        return;
+    }
+    for (ip, _) in connected {
+        let _ = socket.send_to(b"check", *ip).await;
     }
 }
 
@@ -159,7 +185,7 @@ async fn scan_for_servers(socket: &UdpSocket) -> HashMap<IpAddr, String> {
     known_hosts
 }
 
-async fn handle_tick(socket: &UdpSocket, uuid: Uuid) {
+async fn broadcast_msg(socket: &UdpSocket, uuid: Uuid) {
     let msg = format!("{} hosting ns", uuid);
     // temp, change to 255.255.255.255 later
     let _ = socket.send_to(msg.as_bytes(), "255.255.255.255:8080").await;
